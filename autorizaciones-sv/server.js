@@ -7,6 +7,9 @@ const fileUpload = require('express-fileupload');
 const uid = require('uid');
 const db = require('./queries') ;
 
+const tmpDir = '/tmp'
+const fileDir = '/files'
+
 const PostgresqlStore = genFunc(session);
 const sessionStore = new PostgresqlStore(
     {
@@ -60,13 +63,43 @@ app.post('/cargar', async (req, res, next) => {
         res.json({err:'Not Logged IN!'}).end();
         return;
     }
+    const found = await db.query("SELECT role FROM roles WHERE id = $1;", [req.session.usr]);
+    if(found[0]['role'] != 'carga') {
+        res.json({err:'User not allowed to cargar.'}).end();
+        return;
+    }
+    // upload all imges and collect their uids 
+    //if fail, remove all that were uploaded and return
+    // add all image datas to db
+    // if fail remove all images, remove db(if using transaction can roll back!)
+    // and return
+    // post data to autorizaciones.
+    // if failed rollback.
     res.json({err:'Logged IN!'}).end();
+})
+
+app.post('/upload_tmp_file', async(req,res,next) => {
+    if (!req.files || !req.files.f) {
+        res.json({err:'No File!'}).end();
+        return;
+    }
+    const file_id = uid.uid();
+    const uploadPath = path.join(__dirname, tmpDir) 
+                        
+    req.files.f.mv(uploadPath, function (err) {
+        if (err) {
+            console.log(err);
+            res.json({err:'No File!'}).end();
+            return;               
+        }
+    });
+    
 })
 
 
 app.post('/test', async (req, res, next) => {
     if (!req.files) {
-        next()
+        
     }
     else {
        //for uploading mutiple images
@@ -84,7 +117,8 @@ app.post('/test', async (req, res, next) => {
                         
             uploadedData[i].mv(uploadPath, function (err) {
                 if (err) {
-console.log(err)                }
+                    console.log(err)               
+                }
             })
         }
         res.json({f:'ok'});
